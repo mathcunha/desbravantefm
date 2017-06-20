@@ -16,19 +16,20 @@ var mongo_port = "localhost"
 var database = "desbravante"
 
 type show struct {
+	Id    string `bson:"_id"`
 	Title string
 	Desc  string
 	Itens []item
 }
 
 type item struct {
-	Show  show
+	Id    string
 	Date  string
 	Title string
 }
 
 func main() {
-	http.HandleFunc("/show", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/show/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			decoder := json.NewDecoder(r.Body)
@@ -37,16 +38,48 @@ func main() {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			if len(s.Itens) > 0 {
+				if err := s.addItem(); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if err := s.Itens[0].saveContent(); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			} else {
+				if err := s.addShow(); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusCreated)
 
 		case "GET":
+			a_path := strings.Split(r.URL.Path, "/")
+
+			if "" != a_path[2] { //by id
+				s := show{Id: a_path[2]}
+				if err := s.loadShow(); err != nil {
+					http.Error(w, err.Error(), http.StatusNotFound)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+
+				if err := json.NewEncoder(w).Encode(s); err != nil {
+					log.Println("SEVERE: %v error returning json response %v\n", err, s)
+				}
+			}
 		}
 	})
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func saveItemContent(id string) error {
-	resp, err := http.Get("http://" + contentHost + ".mp3")
+func (i *item) saveContent() error {
+	resp, err := http.Get("http://" + contentHost + i.Id + ".mp3")
 	if err != nil {
 		return err
 	}
@@ -57,38 +90,43 @@ func saveItemContent(id string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(id+".mp3", body, 0666)
+	return ioutil.WriteFile(i.Id+".mp3", body, 0666)
+}
+
+func (s *show) loadShow() error {
+	session, err := getSession()
+	if err != nil {
+		return err
+	}
+	defer closeSession(session)
+
+	return session.DB(database).C("show").Find(bson.M{"_id": s.Id}).One(s)
 }
 
 func (s *show) addShow() error {
-	s, err := getSession()
+	session, err := getSession()
 	if err != nil {
 		return err
 	}
-	defer closeSession(s)
+	defer closeSession(session)
 
-	s.SetSafe(&mgo.Safe{FSync: true})
+	session.SetSafe(&mgo.Safe{FSync: true})
 
-	return s.DB(database).C("show").Insert(show{Title: s.Title, Description: s.Desc})
+	return session.DB(database).C("show").Insert(show{Title: s.Title, Desc: s.Desc, Id: s.Id})
 }
 
-func (i *item) addItem() error {
-	s, err := getSession()
+func (s *show) addItem() error {
+	session, err := getSession()
 	if err != nil {
 		return err
 	}
-	defer closeSession(s)
+	defer closeSession(session)
 
-	s.SetSafe(&mgo.Safe{FSync: true})
+	session.SetSafe(&mgo.Safe{FSync: true})
 
-	item := struct {
-		Date  string
-		Title string
-	}{i.Date, i.Title}
+	change := bson.M{"$push": bson.M{"itens": (&s.Itens[0])}}
 
-	change := bson.M{"$push": bson.M{"itens": &item}}
-
-	return s.DB(database).C("show").Update(bson.M{"_id": i.Show.title}, change)
+	return session.DB(database).C("show").Update(bson.M{"_id": s.Id}, change)
 }
 
 func init() {
