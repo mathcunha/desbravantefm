@@ -15,10 +15,28 @@ import (
 const contentHost = "www.bandnewsfm.com.br/colunista/"
 
 type item struct {
-	ID    string
-	Date  string
-	Title string
+	ID     string
+	Date   string
+	Title  string
+	Author string
 }
+
+type rss struct {
+	Title string
+	Date  string
+	Items []item
+}
+
+type token struct {
+	beginItems *regexp.Regexp
+	endItems   *regexp.Regexp
+	beginTitle string
+	endTitle   string
+}
+
+var t1 = token{regexp.MustCompile(`<div class="vc_tta-container"`), regexp.MustCompile(`</div></div></div></div></div></div></div></div>`), `<span class="vc_tta-title-text">`, `</span>`}
+
+var t2 = token{regexp.MustCompile(`<div class="vc_row wpb_row td-pb-row">`), regexp.MustCompile(`<footer>`), `<p>`, `</p>`}
 
 var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" encoding="ISO-8859-1"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/DTDs/Podcast-1.0.dtd" xmlns:media="http://search.yahoo.com/mrss/">
@@ -50,7 +68,7 @@ var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" e
 <enclosure url="http://video.m.mais.uol.com.br/{{.ID}}.mp3" type="audio/mpeg"/>
 <itunes:duration>01:00</itunes:duration>
 <itunes:summary>{{.Title}}</itunes:summary>
-<itunes:author>Buemba!, Buemba!, com José Simão</itunes:author>
+<itunes:author>{{.Author}}</itunes:author>
 <itunes:keywords/>
 </item>
 {{end}}
@@ -65,14 +83,13 @@ func main() {
 
 			if "" != a_path[2] { //by id
 
-				body, err := getPageBody(a_path[2])
+				data := rss{}
+				err := data.load(a_path[2])
+
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusNotFound)
 					return
 				}
-
-				strBody := string(body)
-				begin, end := getIndexes(strBody)
 
 				w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 				w.WriteHeader(http.StatusOK)
@@ -80,12 +97,6 @@ func main() {
 					if err := json.NewEncoder(w).Encode(loadItens(strBody[begin:end])); err != nil {
 						log.Println("SEVERE: %v error returning json response \n", err)
 					}*/
-				t := time.Now()
-				var data = struct {
-					Date  string
-					Items []item
-					Title string
-				}{t.Format("02/01/2006"), loadItens(strBody[begin:end]), loadTitle(strBody)}
 				err = rssBody.Execute(w, data)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusNotFound)
@@ -108,18 +119,19 @@ func (i item) String() string {
 	return fmt.Sprintf("{\"title\":%q, \"date\":%q, \"id\":%q}", i.Title, i.Date, i.ID)
 }
 
-func loadTitle(body string) string {
+func loadTitle(body []byte) string {
 	validTitle := regexp.MustCompile(`<meta property="og:title" content="(?P<title>.+)" />`)
-	title := validTitle.FindStringSubmatch(body)
+	title := validTitle.FindSubmatch(body)
 	if len(title) == 2 {
-		return title[1]
+		return string(title[1])
 	}
 	return ""
 }
 
-func loadItens(body string) []item {
-	titleBegin := `<span class="vc_tta-title-text">`
-	titleEnd := `</span>`
+func loadItems(t token, body, author string) []item {
+	log.Println(body)
+	titleBegin := t.beginTitle
+	titleEnd := t.endTitle
 	validDate := regexp.MustCompile(`[0-9]+\/[0-9]+\/[0-9]+`)
 	validMediaID := regexp.MustCompile(`mediaId=(?P<mediaId>[0-9]+)"`)
 	itens := []item{}
@@ -138,7 +150,7 @@ func loadItens(body string) []item {
 			if mediaID == nil || len(mediaID) != 2 {
 				log.Println("mediaID not found - " + title)
 			} else {
-				itens = append(itens, item{Date: string(date), Title: title[len(string(date)):], ID: mediaID[1]})
+				itens = append(itens, item{Date: string(date), Title: title[len(string(date)):], ID: mediaID[1], Author: author})
 			}
 		}
 		body = body[end+len(titleEnd) : len(body)]
@@ -146,10 +158,32 @@ func loadItens(body string) []item {
 	return itens
 }
 
-func getIndexes(body string) (begin, end int) {
-	begin = strings.Index(body, `<div class="vc_tta-container"`)
-	end = strings.Index(body, `</div></div></div></div></div></div></div></div>`)
+func getIndexes(t token, body []byte) (begin, end int) {
+	indexes := t.beginItems.FindIndex(body)
+	if len(indexes) != 2 {
+		return -1, -1
+	}
+	begin = indexes[1]
+	end = t.endItems.FindIndex(body)[0]
 	return
+}
+
+func (r *rss) load(columnist string) error {
+	body, err := getPageBody(columnist)
+	if err != nil {
+		log.Printf("error loading %v: %v\n", columnist, err)
+		return err
+	}
+	t := t1
+	r.Date = time.Now().Format("02/01/2006")
+	begin, end := getIndexes(t, body)
+	if begin == -1 || end == -1 {
+		t = t2
+		begin, end = getIndexes(t, body)
+	}
+	r.Title = loadTitle(body)
+	r.Items = loadItems(t, string(body[begin:end]), r.Title)
+	return nil
 }
 
 func getPageBody(columnist string) ([]byte, error) {
