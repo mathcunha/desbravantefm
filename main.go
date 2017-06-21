@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -91,7 +92,13 @@ func main() {
 		}
 
 	})
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	var port = os.Getenv("PORT")
+	// Set a default port if there is nothing in the environment
+	if port == "" {
+		port = "8080"
+		log.Println("INFO: No PORT environment variable detected, defaulting to " + port)
+	}
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func (i item) String() string {
