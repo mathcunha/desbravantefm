@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+	"time"
 )
 
 const contentHost = "www.bandnewsfm.com.br/colunista/"
@@ -22,10 +23,10 @@ type item struct {
 var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" encoding="ISO-8859-1"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/DTDs/Podcast-1.0.dtd" xmlns:media="http://search.yahoo.com/mrss/">
 <channel>
-<title>Band - Buemba!, Buemba!, com José Simão</title>
+<title>{{.Title}}</title>
 <link>http://band.com.br/</link>
-<description>com José Simão</description>
-<itunes:subtitle>Buemba!, Buemba!, com José Simão</itunes:subtitle>
+<description>{{.Title}}</description>
+<itunes:subtitle>{{.Title}}</itunes:subtitle>
 <language>pt-br</language>
 <copyright>band.com.br</copyright>
 <pubDate>{{.Date}}</pubDate>
@@ -35,7 +36,7 @@ var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" e
 <itunes:category text="International">
 <itunes:category text="Brazilian" />
 </itunes:category>
-<itunes:keywords>Buemba!, Buemba!, com José Simão,band, colunista</itunes:keywords>
+<itunes:keywords>{{.Title}}</itunes:keywords>
 {{range .Items}}
 <item>
 <title>
@@ -79,10 +80,12 @@ func main() {
 					if err := json.NewEncoder(w).Encode(loadItens(strBody[begin:end])); err != nil {
 						log.Println("SEVERE: %v error returning json response \n", err)
 					}*/
+				t := time.Now()
 				var data = struct {
 					Date  string
 					Items []item
-				}{"12/12/2017", loadItens(strBody[begin:end])}
+					Title string
+				}{t.Format("02/01/2006"), loadItens(strBody[begin:end]), loadTitle(strBody)}
 				err = rssBody.Execute(w, data)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusNotFound)
@@ -103,6 +106,15 @@ func main() {
 
 func (i item) String() string {
 	return fmt.Sprintf("{\"title\":%q, \"date\":%q, \"id\":%q}", i.Title, i.Date, i.ID)
+}
+
+func loadTitle(body string) string {
+	validTitle := regexp.MustCompile(`<meta property="og:title" content="(?P<title>.+)" />`)
+	title := validTitle.FindStringSubmatch(body)
+	if len(title) == 2 {
+		return title[1]
+	}
+	return ""
 }
 
 func loadItens(body string) []item {

@@ -4,6 +4,12 @@ import (
 	"testing"
 )
 
+func TestLoadTitle(t *testing.T) {
+	body, _ := getPageBody("jose-simao")
+	strBody := string(body)
+	t.Logf("%v", loadTitle(strBody))
+}
+
 func TestGetPageBody(t *testing.T) {
 	body, _ := getPageBody("jose-simao")
 	strBody := string(body)
