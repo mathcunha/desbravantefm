@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+	"text/template"
 )
 
 const contentHost = "www.bandnewsfm.com.br/colunista/"
