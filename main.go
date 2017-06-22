@@ -86,7 +86,11 @@ func main() {
 			if "" != a_path[2] { //by id
 
 				data := rss{}
-				err := data.load(a_path[2])
+				col := a_path[2]
+				if "karnal" == a_path[2] {
+					col = "careca-de-saber-com-leandro-karnal"
+				}
+				err := data.load(col)
 
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusNotFound)
