@@ -1,2 +1,2 @@
 # desbravantefm
-Building RSS feed to some radio programs
+Building RSS feed for some Band News columnists
