@@ -14,3 +14,7 @@ func TestGetPageBody(t *testing.T) {
 	begin, end := getIndexes(t1, body)
 	t.Logf("%d, %d \n error:%v", begin, end, err)
 }
+
+func TestBuildReadme(t *testing.T) {
+	buildReadme()
+}

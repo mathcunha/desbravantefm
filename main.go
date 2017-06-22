@@ -136,7 +136,22 @@ func loadImage(body []byte) string {
 	return loadMetaData(`<meta property="og:image" content="(?P<title>.+)" />`, body)
 }
 
-func loadDesc(body []byte) string {
+func loadDesc(column string, body []byte) string {
+	log.Println("loading description")
+	if resp, err := http.Get("http://www.bandnewsfm.com.br/colunistas/"); err == nil {
+		defer resp.Body.Close()
+
+		if body, err := ioutil.ReadAll(resp.Body); err == nil {
+
+			validDesc := regexp.MustCompile(`<p class="listaIntroColunista"><a href="http://www.bandnewsfm.com.br/colunista/` + column + `/">(?P<desc>.+)</a></p>`)
+			descriptions := validDesc.FindAllStringSubmatch(string(body), -1)
+			if len(descriptions) == 1 {
+				return descriptions[0][1]
+			}
+
+		}
+	}
+
 	return loadMetaData(`<meta property="og:description" content="(?P<title>.+)" />`, body)
 }
 
@@ -163,7 +178,6 @@ func loadMetaData(pattern string, body []byte) string {
 }
 
 func loadItems(t token, body, author string) []item {
-	log.Println(body)
 	titleBegin := t.beginTitle
 	titleEnd := t.endTitle
 	validDate := regexp.MustCompile(`[0-9]+\/[0-9]+\/[0-9]+`)
@@ -219,7 +233,7 @@ func (r *rss) load(columnist string) error {
 	r.Image = loadImage(body)
 	r.URL = loadURL(body)
 	r.Host = loadHost(r.URL)
-	r.Desc = loadDesc(body)
+	r.Desc = loadDesc(columnist, body)
 	if "" == r.Desc {
 		r.Desc = r.Title
 	}
@@ -235,4 +249,27 @@ func getPageBody(columnist string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	return ioutil.ReadAll(resp.Body)
+}
+
+func buildReadme() {
+	log.Println("building readme")
+	resp, err := http.Get("http://www.bandnewsfm.com.br/colunistas/")
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		return
+	}
+
+	validNome := regexp.MustCompile(`<p class="listaNomeColunista"><a href="http://www.bandnewsfm.com.br/colunista/(?P<nome>.+)/">(?P<shortDesc>.+)</a></p>`)
+	validDesc := regexp.MustCompile(`<p class="listaIntroColunista"><a href="http://www.bandnewsfm.com.br/colunista/(?P<nome>.+)/">(?P<desc>.+)</a></p>`)
+	descriptions := validDesc.FindAllStringSubmatch(string(body), -1)
+
+	for i, s := range validNome.FindAllStringSubmatch(string(body), -1) {
+		fmt.Printf("[%v](https://desbravantefm.herokuapp.com/show/%v) - %v\n\n", s[2], s[1], descriptions[i][2])
+	}
+
 }
