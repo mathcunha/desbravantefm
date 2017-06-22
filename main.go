@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -26,6 +27,9 @@ type rss struct {
 	Date  string
 	Items []item
 	Image string
+	Desc  string
+	URL   string
+	Host  string
 }
 
 type token struct {
@@ -43,13 +47,12 @@ var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" e
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/DTDs/Podcast-1.0.dtd" xmlns:media="http://search.yahoo.com/mrss/">
 <channel>
 <title>{{.Title}}</title>
-<link>http://band.com.br/</link>
-<description>{{.Title}}</description>
+<link>{{.URL}}</link>
+<description>{{.Desc}}</description>
 <itunes:subtitle>{{.Title}}</itunes:subtitle>
 <language>pt-br</language>
-<copyright>band.com.br</copyright>
+<copyright>{{.Host}}</copyright>
 <pubDate>{{.Date}}</pubDate>
-<itunes:summary>band.com.br</itunes:summary>
 <itunes:image href="{{.Image}}"/>
 <itunes:category text="Information" />
 <itunes:category text="News" />
@@ -126,19 +129,35 @@ func (i item) String() string {
 }
 
 func loadTitle(body []byte) string {
-	validTitle := regexp.MustCompile(`<meta property="og:title" content="(?P<title>.+)" />`)
-	title := validTitle.FindSubmatch(body)
-	if len(title) == 2 {
-		return string(title[1])
-	}
-	return ""
+	return loadMetaData(`<meta property="og:title" content="(?P<title>.+)" />`, body)
 }
 
 func loadImage(body []byte) string {
-	validTitle := regexp.MustCompile(`<meta property="og:image" content="(?P<title>.+)" />`)
-	title := validTitle.FindSubmatch(body)
-	if len(title) == 2 {
-		return string(title[1])
+	return loadMetaData(`<meta property="og:image" content="(?P<title>.+)" />`, body)
+}
+
+func loadDesc(body []byte) string {
+	return loadMetaData(`<meta property="og:description" content="(?P<title>.+)" />`, body)
+}
+
+func loadURL(body []byte) string {
+	return loadMetaData(`<meta property="og:url" content="(?P<title>.+)" />`, body)
+}
+
+func loadHost(u string) string {
+	url, err := url.Parse(u)
+	if err != nil {
+		log.Println("erro parsing URL %v - %v", u, err)
+		return ""
+	}
+	return url.Host
+}
+
+func loadMetaData(pattern string, body []byte) string {
+	valid := regexp.MustCompile(pattern)
+	data := valid.FindSubmatch(body)
+	if len(data) == 2 {
+		return string(data[1])
 	}
 	return ""
 }
@@ -198,12 +217,18 @@ func (r *rss) load(columnist string) error {
 	}
 	r.Title = loadTitle(body)
 	r.Image = loadImage(body)
+	r.URL = loadURL(body)
+	r.Host = loadHost(r.URL)
+	r.Desc = loadDesc(body)
+	if "" == r.Desc {
+		r.Desc = r.Title
+	}
 	r.Items = loadItems(t, string(body[begin:end]), r.Title)
 	return nil
 }
 
 func getPageBody(columnist string) ([]byte, error) {
-	log.Println(columnist)
+	log.Println("requesting " + columnist + " page")
 	resp, err := http.Get("http://" + contentHost + columnist)
 	if err != nil {
 		return nil, err
