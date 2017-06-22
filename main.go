@@ -25,6 +25,7 @@ type rss struct {
 	Title string
 	Date  string
 	Items []item
+	Image string
 }
 
 type token struct {
@@ -49,6 +50,7 @@ var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" e
 <copyright>band.com.br</copyright>
 <pubDate>{{.Date}}</pubDate>
 <itunes:summary>band.com.br</itunes:summary>
+<itunes:image href="{{.Image}}"/>
 <itunes:category text="Information" />
 <itunes:category text="News" />
 <itunes:category text="International">
@@ -128,6 +130,15 @@ func loadTitle(body []byte) string {
 	return ""
 }
 
+func loadImage(body []byte) string {
+	validTitle := regexp.MustCompile(`<meta property="og:image" content="(?P<title>.+)" />`)
+	title := validTitle.FindSubmatch(body)
+	if len(title) == 2 {
+		return string(title[1])
+	}
+	return ""
+}
+
 func loadItems(t token, body, author string) []item {
 	log.Println(body)
 	titleBegin := t.beginTitle
@@ -182,6 +193,7 @@ func (r *rss) load(columnist string) error {
 		begin, end = getIndexes(t, body)
 	}
 	r.Title = loadTitle(body)
+	r.Image = loadImage(body)
 	r.Items = loadItems(t, string(body[begin:end]), r.Title)
 	return nil
 }
