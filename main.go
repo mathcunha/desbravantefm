@@ -15,6 +15,8 @@ import (
 
 const contentHost = "www.bandnewsfm.com.br/colunista/"
 
+var logger = log.New(os.Stdout, "desbravante: ", log.Lshortfile)
+
 type item struct {
 	ID     string
 	Date   string
@@ -119,9 +121,9 @@ func main() {
 	// Set a default port if there is nothing in the environment
 	if port == "" {
 		port = "8080"
-		log.Println("INFO: No PORT environment variable detected, defaulting to " + port)
+		logger.Println("INFO: No PORT environment variable detected, defaulting to " + port)
 	}
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	logger.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func (i item) String() string {
@@ -137,7 +139,7 @@ func loadImage(body []byte) string {
 }
 
 func loadDesc(column string, body []byte) string {
-	log.Println("loading description")
+	logger.Println("loading description")
 	if resp, err := http.Get("http://www.bandnewsfm.com.br/colunistas/"); err == nil {
 		defer resp.Body.Close()
 
@@ -162,7 +164,7 @@ func loadURL(body []byte) string {
 func loadHost(u string) string {
 	url, err := url.Parse(u)
 	if err != nil {
-		log.Println("erro parsing URL %v - %v", u, err)
+		logger.Println("erro parsing URL %v - %v", u, err)
 		return ""
 	}
 	return url.Host
@@ -192,11 +194,11 @@ func loadItems(t token, body, author string) []item {
 		title := body[begin+len(titleBegin) : end]
 		date := validDate.Find([]byte(title))
 		if date == nil {
-			log.Println("Date not found - " + title)
+			logger.Println("Date not found - " + title)
 		} else {
 			mediaID := validMediaID.FindStringSubmatch(body[end:])
 			if mediaID == nil || len(mediaID) != 2 {
-				log.Println("mediaID not found - " + title)
+				logger.Println("mediaID not found - " + title)
 			} else {
 				itens = append(itens, item{Date: string(date), Title: title[len(string(date)):], ID: mediaID[1], Author: author})
 			}
@@ -219,7 +221,7 @@ func getIndexes(t token, body []byte) (begin, end int) {
 func (r *rss) load(columnist string) error {
 	body, err := getPageBody(columnist)
 	if err != nil {
-		log.Printf("error loading %v: %v\n", columnist, err)
+		logger.Printf("error loading %v: %v\n", columnist, err)
 		return err
 	}
 	t := t1
@@ -242,7 +244,7 @@ func (r *rss) load(columnist string) error {
 }
 
 func getPageBody(columnist string) ([]byte, error) {
-	log.Println("requesting " + columnist + " page")
+	logger.Println("requesting " + columnist + " page")
 	resp, err := http.Get("http://" + contentHost + columnist)
 	if err != nil {
 		return nil, err
@@ -252,7 +254,7 @@ func getPageBody(columnist string) ([]byte, error) {
 }
 
 func buildReadme() {
-	log.Println("building readme")
+	logger.Println("building readme")
 	resp, err := http.Get("http://www.bandnewsfm.com.br/colunistas/")
 	if err != nil {
 		return
