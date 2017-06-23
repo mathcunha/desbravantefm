@@ -200,6 +200,9 @@ func loadItems(t token, body, author string) []item {
 			if mediaID == nil || len(mediaID) != 2 {
 				logger.Println("mediaID not found - " + title)
 			} else {
+				if d, err := time.Parse("02/01/2006", string(date)); err == nil {
+					date = []byte(d.Format(time.RFC822Z))
+				}
 				itens = append(itens, item{Date: string(date), Title: title[len(string(date)):], ID: mediaID[1], Author: author})
 			}
 		}
@@ -225,7 +228,7 @@ func (r *rss) load(columnist string) error {
 		return err
 	}
 	t := t1
-	r.Date = time.Now().Format("02/01/2006")
+	r.Date = time.Now().Format(time.RFC822Z)
 	begin, end := getIndexes(t, body)
 	if begin == -1 || end == -1 {
 		t = t2
