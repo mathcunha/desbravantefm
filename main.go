@@ -192,18 +192,19 @@ func loadItems(t token, body, author string) []item {
 			break
 		}
 		title := body[begin+len(titleBegin) : end]
-		date := validDate.Find([]byte(title))
-		if date == nil {
+		date := validDate.FindString(title)
+		if date == "" {
 			logger.Println("Date not found - " + title)
 		} else {
 			mediaID := validMediaID.FindStringSubmatch(body[end:])
 			if mediaID == nil || len(mediaID) != 2 {
 				logger.Println("mediaID not found - " + title)
 			} else {
-				if d, err := time.Parse("02/01/2006", string(date)); err == nil {
-					date = []byte(d.Format(time.RFC822))
+				dateLen := len(date)
+				if d, err := time.Parse("02/01/2006", date); err == nil {
+					date = d.Format(time.RFC822)
 				}
-				itens = append(itens, item{Date: string(date), Title: title[len(string(date)):], ID: mediaID[1], Author: author})
+				itens = append(itens, item{Date: date, Title: title[dateLen:], ID: mediaID[1], Author: author})
 			}
 		}
 		body = body[end+len(titleEnd) : len(body)]
