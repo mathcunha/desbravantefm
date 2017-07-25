@@ -272,10 +272,11 @@ func loadItemsFromTracks(t *[]track, author string) []item {
 	validDate := regexp.MustCompile(`[0-9]+\/[0-9]+\/[0-9]+`)
 	for i, v := range *t {
 		date := validDate.FindString(v.Title)
+		dateLen := len(date)
 		if d, err := time.Parse("02/01/2006", date); err == nil {
 			date = d.Format(time.RFC822)
 		}
-		itens[i] = item{Title: v.Title, Date: date, Src: v.Src, Author: author}
+		itens[i] = item{Title: v.Title[dateLen:], Date: date, Src: v.Src, Author: author}
 	}
 	return itens
 }
@@ -294,7 +295,7 @@ func getTracks(body []byte) []track {
 	logger.Println("loading tracks")
 	matches := scriptBody.FindSubmatch(body)
 	if len(matches) != 2 {
-		logger.Printf("returned: \n%v", len(matches))
+		logger.Printf("returned: \n%v\n%v", len(matches), string(body))
 		return nil
 	}
 	var t = struct {
