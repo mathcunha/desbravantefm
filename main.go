@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -17,8 +18,17 @@ const contentHost = "www.bandnewsfm.com.br/colunista/"
 
 var logger = log.New(os.Stdout, "desbravante: ", log.Lshortfile)
 
+//publisher started to use this layout
+type track struct {
+	Src         string
+	Caption     string
+	Title       string
+	Description string
+	Image       string
+}
+
 type item struct {
-	ID     string
+	Src    string
 	Date   string
 	Title  string
 	Author string
@@ -44,6 +54,8 @@ type token struct {
 var t1 = token{regexp.MustCompile(`<div class="vc_tta-container"`), regexp.MustCompile(`</div></div></div></div></div></div></div></div>`), `<span class="vc_tta-title-text">`, `</span>`}
 
 var t2 = token{regexp.MustCompile(`<div class="vc_row wpb_row td-pb-row">`), regexp.MustCompile(`<footer>`), `<p>`, `</p>`}
+
+var scriptBody = regexp.MustCompile(`<script type="application/json" class="wp-playlist-script">(?P<body>.+)</script>`)
 
 var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" encoding="ISO-8859-1"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/DTDs/Podcast-1.0.dtd" xmlns:media="http://search.yahoo.com/mrss/">
@@ -72,7 +84,7 @@ var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" e
 <description/>
 <itunes:subtitle/>
 <pubDate>{{.Date}}</pubDate>
-<enclosure url="http://video.m.mais.uol.com.br/{{.ID}}.mp3" type="audio/mpeg"/>
+<enclosure url="{{.Src}}" type="audio/mpeg"/>
 <itunes:duration>01:00</itunes:duration>
 <itunes:summary>{{.Title}}</itunes:summary>
 <itunes:author>{{.Author}}</itunes:author>
@@ -106,7 +118,7 @@ func main() {
 				w.WriteHeader(http.StatusOK)
 				/*
 					if err := json.NewEncoder(w).Encode(loadItens(strBody[begin:end])); err != nil {
-						log.Println("SEVERE: %v error returning json response \n", err)
+						logger.Println("SEVERE: %v error returning json response \n", err)
 					}*/
 				err = rssBody.Execute(w, data)
 				if err != nil {
@@ -127,7 +139,7 @@ func main() {
 }
 
 func (i item) String() string {
-	return fmt.Sprintf("{\"title\":%q, \"date\":%q, \"id\":%q}", i.Title, i.Date, i.ID)
+	return fmt.Sprintf("{\"title\":%q, \"date\":%q, \"id\":%q}", i.Title, i.Date, i.Src)
 }
 
 func loadTitle(body []byte) string {
@@ -204,7 +216,7 @@ func loadItems(t token, body, author string) []item {
 				if d, err := time.Parse("02/01/2006", date); err == nil {
 					date = d.Format(time.RFC822)
 				}
-				itens = append(itens, item{Date: date, Title: title[dateLen:], ID: mediaID[1], Author: author})
+				itens = append(itens, item{Date: date, Title: title[dateLen:], Src: fmt.Sprintf("http://video.m.mais.uol.com.br/%v.mp3", mediaID[1]), Author: author})
 			}
 		}
 		body = body[end+len(titleEnd) : len(body)]
@@ -228,13 +240,7 @@ func (r *rss) load(columnist string) error {
 		logger.Printf("error loading %v: %v\n", columnist, err)
 		return err
 	}
-	t := t1
-	r.Date = time.Now().Format(time.RFC822)
-	begin, end := getIndexes(t, body)
-	if begin == -1 || end == -1 {
-		t = t2
-		begin, end = getIndexes(t, body)
-	}
+
 	r.Title = loadTitle(body)
 	r.Image = loadImage(body)
 	r.URL = loadURL(body)
@@ -243,8 +249,35 @@ func (r *rss) load(columnist string) error {
 	if "" == r.Desc {
 		r.Desc = r.Title
 	}
+
+	if t := getTracks(body); t != nil {
+		r.Items = loadItemsFromTracks(&t, r.Title)
+		return nil
+	}
+
+	t := t1
+	r.Date = time.Now().Format(time.RFC822)
+	begin, end := getIndexes(t, body)
+	if begin == -1 || end == -1 {
+		t = t2
+		begin, end = getIndexes(t, body)
+	}
 	r.Items = loadItems(t, string(body[begin:end]), r.Title)
 	return nil
+}
+
+func loadItemsFromTracks(t *[]track, author string) []item {
+	logger.Println("tracks to items")
+	itens := make([]item, len(*t), len(*t))
+	validDate := regexp.MustCompile(`[0-9]+\/[0-9]+\/[0-9]+`)
+	for i, v := range *t {
+		date := validDate.FindString(v.Title)
+		if d, err := time.Parse("02/01/2006", date); err == nil {
+			date = d.Format(time.RFC822)
+		}
+		itens[i] = item{Title: v.Title, Date: date, Src: v.Src, Author: author}
+	}
+	return itens
 }
 
 func getPageBody(columnist string) ([]byte, error) {
@@ -255,6 +288,35 @@ func getPageBody(columnist string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 	return ioutil.ReadAll(resp.Body)
+}
+
+func getTracks(body []byte) []track {
+	logger.Println("loading tracks")
+	matches := scriptBody.FindSubmatch(body)
+	if len(matches) != 2 {
+		logger.Printf("returned: \n%v", len(matches))
+		return nil
+	}
+	var t = struct {
+		Tracks []track
+	}{}
+
+	err := json.Unmarshal(matches[1], &t)
+	if err != nil {
+		logger.Printf("error unquoting json body %v : \n %v", string(matches[1]), err)
+		return nil
+	}
+	return t.Tracks
+
+	/*
+		str, err := strconv.Unquote(matches[1])
+		if err != nil {
+			logger.Printf("error unquoting json body %v : \n %v", matches[1], err)
+			return ""
+		}
+
+		return str
+	*/
 }
 
 func buildReadme() {

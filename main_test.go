@@ -18,3 +18,8 @@ func TestGetPageBody(t *testing.T) {
 func TestBuildReadme(t *testing.T) {
 	buildReadme()
 }
+
+func TestGetTracks(t *testing.T) {
+	body, _ := getPageBody("jose-simao")
+	t.Log(getTracks(body))
+}
