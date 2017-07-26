@@ -95,6 +95,7 @@ var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" e
 </rss>`))
 
 func main() {
+	cache := make(map[string]rss)
 	http.HandleFunc("/show/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -103,6 +104,7 @@ func main() {
 			if "" != a_path[2] { //by id
 
 				data := rss{}
+				found := false
 				col := a_path[2]
 				if "karnal" == a_path[2] {
 					col = "careca-de-saber-com-leandro-karnal"
@@ -110,8 +112,13 @@ func main() {
 				err := data.load(col)
 
 				if err != nil {
-					http.Error(w, err.Error(), http.StatusNotFound)
-					return
+					data, found = cache[col]
+					if !found {
+						http.Error(w, err.Error(), http.StatusNotFound)
+						return
+					}
+				} else {
+					cache[col] = data
 				}
 
 				w.Header().Set("Content-Type", "application/xml; charset=utf-8")
@@ -154,6 +161,10 @@ func loadDesc(column string, body []byte) string {
 	logger.Println("loading description")
 	if resp, err := http.Get("http://www.bandnewsfm.com.br/colunistas/"); err == nil {
 		defer resp.Body.Close()
+		if resp.StatusCode >= http.StatusBadRequest {
+			logger.Printf("description page returned status code %d.", resp.StatusCode)
+			return ""
+		}
 
 		if body, err := ioutil.ReadAll(resp.Body); err == nil {
 
@@ -288,6 +299,11 @@ func getPageBody(columnist string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("feed returned status code %d", resp.StatusCode)
+	}
+
 	return ioutil.ReadAll(resp.Body)
 }
 
