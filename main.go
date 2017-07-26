@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -281,13 +283,19 @@ func loadItemsFromTracks(t *[]track, author string) []item {
 	logger.Println("tracks to items")
 	itens := make([]item, len(*t), len(*t))
 	validDate := regexp.MustCompile(`[0-9]+\/[0-9]+\/[0-9]+`)
+	buffer := bytes.NewBuffer([]byte{})
 	for i, v := range *t {
 		date := validDate.FindString(v.Title)
 		dateLen := len(date)
 		if d, err := time.Parse("02/01/2006", date); err == nil {
 			date = d.Format(time.RFC822)
 		}
-		itens[i] = item{Title: v.Title[dateLen:], Date: date, Src: v.Src, Author: author}
+		if err := xml.EscapeText(buffer, []byte(v.Title[dateLen:])); err == nil {
+			itens[i] = item{Title: buffer.String(), Date: date, Src: v.Src, Author: author}
+		} else {
+			itens[i] = item{Title: v.Title[dateLen:], Date: date, Src: v.Src, Author: author}
+		}
+		buffer.Reset()
 	}
 	return itens
 }
