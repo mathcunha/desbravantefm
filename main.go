@@ -132,9 +132,18 @@ func main() {
 				err = rssBody.Execute(w, data)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusNotFound)
-					return
 				}
+				return
 			}
+			if content, err := json.Marshal(cache); err == nil {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusOK)
+				w.Write(content)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 
 	})
