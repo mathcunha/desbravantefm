@@ -111,7 +111,7 @@ func sendRss(w http.ResponseWriter, data *rss) {
 }
 
 func main() {
-	cache := NewCache("careca-de-saber-com-leandro-karnal", "e-o-bicho", "futebol-com-milton-neves", "jose-simao", "karnal", "politica-com-dora-kramer", "reinaldo-azevedo", "ricardo-boechat")
+	cache := NewCache("careca-de-saber-com-leandro-karnal", "e-o-bicho", "futebol-com-milton-neves", "jose-simao", "politica-com-dora-kramer", "reinaldo-azevedo", "ricardo-boechat")
 	//cache := NewCache("careca-de-saber-com-leandro-karnal", "e-o-bicho")
 	http.HandleFunc("/show/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -124,7 +124,7 @@ func main() {
 					col = "careca-de-saber-com-leandro-karnal"
 				}
 
-				if rss, has := cache.Get(col); has && r != nil {
+				if rss, has := cache.Get(col); has && rss != nil {
 					sendRss(w, rss)
 					return
 				}
