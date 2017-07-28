@@ -96,46 +96,48 @@ var rssBody = template.Must(template.New("rssBody").Parse(`<?xml version="1.0" e
 </channel>
 </rss>`))
 
+func sendRss(w http.ResponseWriter, data *rss) {
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	/*
+		if err := json.NewEncoder(w).Encode(loadItens(strBody[begin:end])); err != nil {
+			logger.Println("SEVERE: %v error returning json response \n", err)
+		}
+	*/
+	if err := rssBody.Execute(w, *data); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+	}
+	return
+}
+
 func main() {
-	cache := make(map[string]rss)
+	//cache := NewCache("careca-de-saber-com-leandro-karnal", "e-o-bicho", "futebol-com-milton-neves", "jose-simao", "karnal", "politica-com-dora-kramer", "reinaldo-azevedo", "ricardo-boechat")
+	cache := NewCache("careca-de-saber-com-leandro-karnal", "e-o-bicho")
 	http.HandleFunc("/show/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			a_path := strings.Split(r.URL.Path, "/")
 
 			if "" != a_path[2] { //by id
-
-				data := rss{}
-				found := false
 				col := a_path[2]
 				if "karnal" == a_path[2] {
 					col = "careca-de-saber-com-leandro-karnal"
 				}
-				err := data.load(col)
 
-				if err != nil {
-					data, found = cache[col]
-					if !found {
-						http.Error(w, err.Error(), http.StatusNotFound)
-						return
-					}
-				} else {
-					cache[col] = data
+				if rss, has := cache.Get(col); has && r != nil {
+					sendRss(w, rss)
+					return
 				}
 
-				w.Header().Set("Content-Type", "application/xml; charset=utf-8")
-				w.WriteHeader(http.StatusOK)
-				/*
-					if err := json.NewEncoder(w).Encode(loadItens(strBody[begin:end])); err != nil {
-						logger.Println("SEVERE: %v error returning json response \n", err)
-					}*/
-				err = rssBody.Execute(w, data)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusNotFound)
+				data := rss{}
+				if err := data.load(col); err == nil {
+					cache.Set(col, &data)
 				}
+
+				sendRss(w, &data)
 				return
 			}
-			if content, err := json.Marshal(cache); err == nil {
+			if content, err := json.Marshal(cache.feeds); err == nil {
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(http.StatusOK)
 				w.Write(content)
