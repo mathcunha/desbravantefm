@@ -116,11 +116,11 @@ func main() {
 	http.HandleFunc("/show/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
-			a_path := strings.Split(r.URL.Path, "/")
+			path := strings.Split(r.URL.Path, "/")
 
-			if "" != a_path[2] { //by id
-				col := a_path[2]
-				if "karnal" == a_path[2] {
+			if "" != path[2] { //by id
+				col := path[2]
+				if "karnal" == path[2] {
 					col = "careca-de-saber-com-leandro-karnal"
 				}
 
@@ -200,7 +200,7 @@ func loadURL(body []byte) string {
 func loadHost(u string) string {
 	url, err := url.Parse(u)
 	if err != nil {
-		logger.Println("erro parsing URL %v - %v", u, err)
+		logger.Printf("erro parsing URL %v - %v\n", u, err)
 		return ""
 	}
 	return url.Host

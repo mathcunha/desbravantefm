@@ -6,6 +6,7 @@ type cache struct {
 	feeds map[string]*rss
 }
 
+//NewCache builds a new cache using the columns as key and nil as value
 func NewCache(columns ...string) (c *cache) {
 	c = &cache{feeds: make(map[string]*rss)}
 	for _, v := range columns {
@@ -23,7 +24,7 @@ func NewCache(columns ...string) (c *cache) {
 }
 
 func (c *cache) Update() {
-	for col, _ := range c.feeds {
+	for col := range c.feeds {
 		rss := &rss{}
 		if err := rss.load(col); err == nil {
 			c.feeds[col] = rss
